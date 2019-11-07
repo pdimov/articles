@@ -1,0 +1,208 @@
+# Phasing out {cpp}03 Support in Boost
+Peter Dimov
+:toc: left
+
+## Summary
+
+We need a policy on phasing out {cpp}03 support in Boost.
+
+{cpp}03 support is holding us back. It impedes development, increases
+maintenance costs, increases dependencies, and increases
+compilation times.
+
+Library authors and maintainers need to have an approved mechanism
+for dropping {cpp}03 support in their libraries.
+
+The suggested way forward is to allow library authors to declare {cpp}03
+support deprecated via a notice in the documentation and a message issued
+at compile time, then be allowed to drop {cpp}03 support no earlier than
+three Boost releases later.
+
+For instance, a library may declare {cpp}03 support deprecated in Boost
+1.73, and drop it no earlier than in Boost 1.76.
+
+## Frequently Asked Questions
+
+### "I thought library authors were free to only support {cpp}17?"
+
+This is Boost policy for new library submissions. It's obviously
+unworkable for old and established libraries (that are currently in
+maintenance mode) on which many other libraries depend, both in Boost
+and outside of it.
+
+For example, Boost is a dependency of hundreds, if not thousands, Debian
+packages. We have a responsibility to not break them unnecessarily.
+
+### "Why not use {cpp}11 only if available?"
+
+In addition to increasing maintenance costs, this also creates other
+problems. Let's consider the scenario in which a Boost library uses,
+for example, `std::function` under {cpp}11 and `boost::function` under
+{cpp}03.
+
+```
+namespace lib1
+{
+
+#if CXX11
+using std::function;
+#else
+using boost::function;
+#endif
+
+struct lib1_type
+{
+    function<void()> f_;
+};
+
+} // lib1
+```
+
+It's common, at least under Linux, for user code to use a system-provided
+Boost (which is often compiled under {cpp}03), and to use f.ex. {cpp}14 or
+even {cpp}17 itself.
+
+This means that `lib1_type` will have different definitions in the precompiled
+Boost library and in user code, which leads to hard to track undefined behavior.
+
+To avoid these problems, `lib1` should always use `std::function`.
+
+### "What does {cpp}11 mean anyway?"
+
+Every library author will be allowed to determine which {cpp}11 features are
+required. Some libraries may only need `std::function` and `std::tuple`; others
+may require defaulted functions.
+
+In general, though, a reasonable minimum water mark will be variadic templates and
+rvalue references (including `std::move` and `std::forward`.)
+
+To take two concrete examples, GCC before 4.8 and Microsoft Visual {cpp} before
+2013 cannot really be considered {cpp}11 compilers. (Again, a library will be free
+to consider f.ex. V{cpp} 2012 or GCC 4.6 with `-std=c++0x` adequate if it so wishes.)
+
+## Ongoing Costs of Maintaining {cpp}03 Support
+
+### Impeded Development
+
+If a library supports {cpp}03, contributions that use {cpp}11 features have to either
+be rejected, or have {cpp}03 workarounds applied to them.
+
+Since {cpp}11 features such as variadic templates and perfect forwarding significantly
+increase productivity, this slows down the pace of development.
+
+### Increased Maintenance Costs
+
+Even libraries in maintenance mode need to be updated to support newer standards, and
+{cpp}03 code is significantly costlier to change due to, f.ex. use of the preprocessor
+to emulate variadic templates and use of numerous overloads to emulate perfect forwarding.
+
+In addition, {cpp}03 compilers are generally older and have more quirks and issues that
+need to be worked around.
+
+### Increased Dependencies
+
+Libraries that support {cpp}03 have to use Boost components even when a corresponding
+standard library component exists in {cpp}11. Examples are `std::function`, `std::bind`,
+`std::tuple`, `std::shared_ptr`, `<type_traits>`, `std::fpclassify`, and so on.
+
+### Increased Compilation Times
+
+One common complaint against Boost is high compilation times. Nearly all such objections
+can be traced to use of either the preprocessor library or Boost.MPL, and the reason is
+that without variadic templates, a high number of overloads or specializations need to
+be generated and parsed.
+
+If we require {cpp}11, it would be possible, at least in principle, to gradually switch
+all such uses into the corresponding {cpp}11 construct, whether by using variadic templates
+directly, move from use of Boost.MPL to use of Boost.Mp11, or even by rewriting the
+internals of Boost.MPL in a more modern style.
+
+## Suggested Policy
+
+A library author or maintainer will be allowed to announce that {cpp}03 support in the
+library is deprecated.
+
+This announcement will take the following forms:
+
+* A note in the documentation;
+* An item in the release notes in the Boost release deprecating {cpp}03 support;
+* A message issued at compilation time if a library header is included in {cpp}03 mode.
+
+The recommended form of the code issuing the message will be
+
+```
+#include <boost/config.hpp>
+#include <boost/config/pragma_message.hpp>
+
+#if defined(BOOST_NO_CXX11_VARIADIC_TEMPLATES) || defined(BOOST_NO_CXX11_RVALUE_REFERENCES) || defined(BOOST_NO_CXX11_HDR_MEMORY)
+
+BOOST_PRAGMA_MESSAGE("C++03 support is deprecated in Boost.Library 1.73 and will be removed in Boost.Library 1.76.")
+
+#endif
+```
+
+with the condition of the `#if` directive adjusted appropriately to reflect the actual
+library requirements.
+
+At least three Boost releases must ship with a deprecation notice before support is dropped.
+
+## Costs of Dropping {cpp}03 Support
+
+### {cpp}03 Users will be Unable to Upgrade Boost
+
+The most obvious cost of a Boost library no longer supporting {cpp}03 is that users of
+this library who are still under {cpp}03 will be unable to upgrade Boost beyond the release
+that drops {cpp}03 support.
+
+Assuming that this policy is adopted today, the earliest such occurence will be in April 2021.
+{cpp}11 will be ten years old then, a reasonably long availability period for even the most
+conservative projects.
+
+### Building Boost May Fail
+
+The default {cpp} standard in GCC 5 and earlier, and Clang 5 and earlier, is 03, which implies
+that building Boost via the default `b2 install` invocation will fail on these compilers.
+
+However, the system compiler on the Linux distributions in use in 2021 is expected to be GCC 6
+or later. In addition, building `b2` itself requires {cpp}11 already, which rules out V{cpp}
+versions earlier than 2013.
+
+### Switching from `boost::` to `std::` Components May Change Behavior
+
+For Boost components that have direct {cpp}11 standard library equivalents, such as `boost::bind`,
+it might seem natural to consider replacing their Boost definitions with a using directive, as in
+
+```
+// boost/bind.hpp
+
+#include <functional>
+
+namespace boost
+{
+    using std::bind;
+}
+```
+
+But it's not so simple.
+
+Boost components often differ from the corresponding standard component in subtle ways. For example,
+applying `std::ref` to `std::reference_wrapper<X>` yields `std::reference_wrapper<X>`, but the
+equivalent Boost code yields `boost::reference_wrapper<boost::reference_wrapper<X>>`. Replacing
+`boost::ref` with a using declaration for `std::ref` will break code relying on the Boost behavior,
+such as Boost.Proto.
+
+Replacing `boost::bind` with a using declaration for `std::bind` as in the above code causes
+different problems. First, `boost::bind` supports relational operators as an extension; second, it
+can perform limited overload resolution when applied to an overloaded function; third, it recognizes
+`boost::reference_wrapper`, and `std::bind` doesn't, which requires `boost::ref` to be migrated to
+`std::ref` first; fourth, specializations of `boost::is_placeholder` will break; and so on.
+
+Replacing `boost::function` with a using declaration for `std::function` will, in addition to
+breaking all code relying on `boost::function` extensions such as allocator support, `contains`,
+and `operator==`, also change the behavior of `target` when the `function` stores a `reference_wrapper`.
+It turns out that after `std::function<void()> f2 = std::ref(f);`, `f2.target<F>()` does not return
+`&f` as it does for `boost::function`. 
+
+### Is it Still Worth Doing?
+
+Yes. Enough is enough.
