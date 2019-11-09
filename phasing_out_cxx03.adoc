@@ -16,10 +16,10 @@ for dropping {cpp}03 support in their libraries.
 The suggested way forward is to allow library authors to declare {cpp}03
 support deprecated via a notice in the documentation and a message issued
 at compile time, then be allowed to drop {cpp}03 support no earlier than
-three Boost releases later.
+two Boost releases later.
 
 For instance, a library may declare {cpp}03 support deprecated in Boost
-1.73, and drop it no earlier than in Boost 1.76.
+1.73, and drop it no earlier than in Boost 1.75.
 
 ## Frequently Asked Questions
 
@@ -144,7 +144,7 @@ BOOST_PRAGMA_MESSAGE("C++03 support is deprecated in Boost.Library 1.73 and will
 with the condition of the `#if` directive adjusted appropriately to reflect the actual
 library requirements.
 
-At least three Boost releases must ship with a deprecation notice before support is dropped.
+At least two Boost releases must ship with a deprecation notice before support is dropped.
 
 ## Costs of Dropping {cpp}03 Support
 
@@ -154,8 +154,8 @@ The most obvious cost of a Boost library no longer supporting {cpp}03 is that us
 this library who are still under {cpp}03 will be unable to upgrade Boost beyond the release
 that drops {cpp}03 support.
 
-Assuming that this policy is adopted today, the earliest such occurence will be in April 2021.
-{cpp}11 will be ten years old then, a reasonably long availability period for even the most
+Assuming that this policy is adopted today, the earliest such occurence will be in December 2020.
+{cpp}11 will be almost ten years old then, a reasonably long availability period for even the most
 conservative projects.
 
 ### Building Boost May Fail
