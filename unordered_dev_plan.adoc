@@ -1,0 +1,116 @@
+﻿# Development Plan for Boost.Unordered
+Peter Dimov
+:toc: left
+
+## Background
+
+Boost.Unordered implements the TR1/{cpp}11 unordered
+containers as proposed by Matt Austern in
+http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2003/n1456.html[N1456].
+Section III.B in the paper explains why closed addressing is assumed.
+
+The arguments there were valid at the time the paper was written (2004),
+but the state of the art has advanced since then, and the hash tables
+currently in use have chosen open addressing.
+
+In addition, the standard specification of the unordered containers is
+too limiting even for the closed addressing case, and a slight relaxation
+of the signature of `erase` and the complexity requirements of the
+iterators allows more implementation freedom; notably, it would allow
+the textbook closed addressing hash table that consists of a bucket
+array holding singly linked lists.
+
+Therefore, there is room for adding more containers to Unordered that
+implement these additional hash table variations.
+
+## Goals and Non-Goals
+
+Our primary aim will be competitive performance in each category, as
+measured on the
+https://github.com/boostorg/unordered/tree/develop/benchmark[synthetic benchmarks]
+for both integral keys (`uint32.cpp` and `uint64.cpp`) and string keys
+(`string.cpp`) using the FNV-1a hash function in order to level the
+playing field and eliminate platform-specific variations in the
+performance of the default hash function.
+
+Competitive performance for strings using the default hash function
+will be a secondary goal.
+
+We will not
+
+1. Implement a custom default allocator. First, the allocator is easily
+   replaced by the user; second, our goal is competitive performance when
+   comparing like with like, e.g. `boost::unordered_map` against
+   `std::unordered_map` with both using the default `std::allocator`.
+2. Change the default hash function. The default will remain `boost::hash`.
+   `boost::hash` is more full-featured than `std::hash`, it does not vary
+   from platform to platform, is easily replaceable, and improving its
+   performance will be done in ContainerHash rather than in Unordered.
+3. Use platform-specific features that change the observable behavior of
+   the containers (improving performance without observable changes by
+   using e.g. SSE2 is fine.) The fact that Unordered can be tested on
+   one platform and then be relied upon to deterministically perform in the
+   same way on another (subject to `std::size_t` being the same size) is
+   an important benefit that we have over `std::unordered_*`.
+4. Provide more than one container per category. We will experiment will
+   several possibilities, but at the end we must settle on one.
+
+## Container Variations
+
+We will provide the following containers (only `_map` is discussed for
+brevity but everything applies to `_set`, `_multiset`, `_multimap`):
+
+1. `unordered_map`. Remains a conforming implementation of the
+   `std::unordered_map` specification. At the moment our performance
+   suffers because we need to perform a double indirection on lookup to
+   reach the element, so we lose against both `std::unordered_map` and
+   `boost::multi_index`. We need to fix this by either using a doubly
+   linked list for the elements, or a doubly linked list for the buckets,
+   as in Joaquín M López Muñoz's
+   https://github.com/joaquintides/fca_unordered[prototype].
+
+2. `unordered_bucket_map`. This will implement an almost-standard-conforming
+   interface, with `erase(iterator)` returning `void` (as per
+   http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n2023.pdf[N2023]),
+   and iteration from `begin()` to `end()` taking `O(bucket_count()+size())`
+   instead of `O(size())`. This allows a straightforward implementation where
+   the bucket array holds singly linked lists, without any additional bucket
+   or element links.
+
+3. `unordered_flat_map`. Open addressing container in which the elements are
+   held directly in the bucket array, rather than in separately allocated
+   nodes. This strongly deviates from the standard API, in that pointers and
+   references to elements are invalidated on rehash, iteration is
+   `O(capacity())`, there are no local bucket iterators or bucket-oriented
+   queries, and there is no node-based API. We should probably consider not
+   providing control over the load factor, to allow implementation freedom,
+   as load factors are highly specific to the underlying implementation, and
+   we want to be able to switch it in a future release if needed.
++
+The performance target here will be `absl::flat_hash_map`.
+
+4. `unordered_node_map`. Same as `unordered_flat_map`, but holds pointers to
+   the elements rather than the elements themselves in the bucket array. The
+   difference with `unordered_flat_map` is pointer and reference stability.
+   The performance target will be `absl::flat_node_map`.
+
+There are several alternatives we can pursue when implementing `unordered_flat_map`:
+
+* https://en.wikipedia.org/wiki/Hash_table#Robin_Hood_hashing[Robin Hood hashing]
+* https://en.wikipedia.org/wiki/Hopscotch_hashing[Hopscotch hashing]
+* https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/[Malte Skarupke's "byte linked list"]
+
+Since at the moment there is no clear winner, we will probably need to implement
+all of these and compare their performance characteristics. I would start with
+Hopscotch hashing, because it's very friendly to using SSE2 to test all 16
+candidate buckets at once for a match, if we use a similar trick as Abseil. (For
+instance, we can store `H % 251` in the metadata byte, with 255 reserved for "free",
+and then use packed comparison to quickly check if one of the 16 candidate buckets
+might contain our element.)
+
+It's possible that some of these containers may turn out to be of limited utility
+due to being dominated by another container that provides a superset of the API.
+This may happen, for instance, if `unordered_map` is as fast as `unordered_bucket_map`,
+or if `unordered_bucket_map` is as fast or faster than `unordered_node_map`. If this
+proves to be the case, we'll need to decide whether to include the superseded
+container or not, taking differences in memory consumption into account.
