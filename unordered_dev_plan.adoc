@@ -95,8 +95,8 @@ brevity but everything applies to `_set`, `_multiset`, `_multimap`):
    nodes. This strongly deviates from the standard API, in that pointers and
    references to elements are invalidated on rehash, iteration is
    `O(capacity())`, there are no local bucket iterators or bucket-oriented
-   queries, and there is no node-based API. We should probably consider not
-   providing control over the load factor, to allow implementation freedom,
+   queries, and there is no node-based API. We should probably not provide
+   control over the load factor, to allow implementation freedom,
    as load factors are highly specific to the underlying implementation, and
    we want to be able to switch it in a future release if needed.
 +
@@ -107,23 +107,40 @@ The performance target here will be `absl::flat_hash_map`.
    difference with `unordered_flat_map` is pointer and reference stability.
    The performance target will be `absl::flat_node_map`.
 
-There are several alternatives we can pursue when implementing `unordered_flat_map`:
-
-* https://en.wikipedia.org/wiki/Hash_table#Robin_Hood_hashing[Robin Hood hashing]
-* https://en.wikipedia.org/wiki/Hopscotch_hashing[Hopscotch hashing]
-* https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/[Malte Skarupke's "byte linked list"]
-
-Since at the moment there is no clear winner, we will probably need to implement
-all of these and compare their performance characteristics. I would start with
-Hopscotch hashing, because it's very friendly to using SSE2 to test all 16
-candidate buckets at once for a match, if we use a similar trick as Abseil. (For
-instance, we can store `H % 251` in the metadata byte, with 255 reserved for "free",
-and then use packed comparison to quickly check if one of the 16 candidate buckets
-might contain our element.)
-
-It's possible that some of these containers may turn out to be of limited utility
+NOTE: It's possible that some of these containers may turn out to be of limited utility
 due to being dominated by another container that provides a superset of the API.
 This may happen, for instance, if `unordered_map` is as fast as `unordered_bucket_map`,
 or if `unordered_bucket_map` is as fast or faster than `unordered_node_map`. If this
 proves to be the case, we'll need to decide whether to include the superseded
 container or not, taking differences in memory consumption into account.
+
+## Implementation Notes
+
+There are several alternatives we can pursue when implementing `unordered_flat_map`:
+
+* https://en.wikipedia.org/wiki/Hash_table#Robin_Hood_hashing[Robin Hood hashing]
+* https://en.wikipedia.org/wiki/Hopscotch_hashing[Hopscotch hashing]
+* https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/[Malte Skarupke's "byte linked list"]
+* https://abseil.io/about/design/swisstables[Abseil Swiss tables]
+
+Since at the moment there is no clear winner, we will probably need to implement
+all of these and compare their performance characteristics. Most of the alternative
+implementations gravitate towards Robin Hood hashing, but there is a Hopscotch
+implementation (https://github.com/Tessil/hopscotch-map[`tsl::hopscotch`]) that
+holds its own on https://tessil.github.io/2016/08/29/benchmark-hopscotch-map.html[benchmarks].
+
+More references:
+
+* https://martin.ankerl.com/2019/04/01/hashmap-benchmarks-01-overview/[Martin Ankerl's benchmarks]
+* https://martin.ankerl.com/2016/09/15/very-fast-hashmap-in-c-part-1/[Martin Ankerl's thoughts on Hopscotch vs Robin Hood]
+* https://probablydance.com/2017/02/26/i-wrote-the-fastest-hashtable/[Malte Skarupke's Robin Hood table]
+
+There are also other, less sophisticated, alternatives we can pursue. We can explore
+"simple" linear probing with an upper limit on probes, and reallocate if that's
+reached. If the limit is set to a multiple of 16, this can be accomplished by a SSE2
+packed compare similar to Abseil's technique, if we store e.g. `hash mod 251` in the
+byte metadata.
+
+We can also explore a hybrid option where the first element of the per-bucket linked
+list is stored directly in the bucket array (as in a flat map), but the rest are
+chained as in a closed addressing map.

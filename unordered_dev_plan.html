@@ -450,6 +450,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_background">Background</a></li>
 <li><a href="#_goals_and_non_goals">Goals and Non-Goals</a></li>
 <li><a href="#_container_variations">Container Variations</a></li>
+<li><a href="#_implementation_notes">Implementation Notes</a></li>
 </ul>
 </div>
 </div>
@@ -581,8 +582,8 @@ held directly in the bucket array, rather than in separately allocated
 nodes. This strongly deviates from the standard API, in that pointers and
 references to elements are invalidated on rehash, iteration is
 <code>O(capacity())</code>, there are no local bucket iterators or bucket-oriented
-queries, and there is no node-based API. We should probably consider not
-providing control over the load factor, to allow implementation freedom,
+queries, and there is no node-based API. We should probably not provide
+control over the load factor, to allow implementation freedom,
 as load factors are highly specific to the underlying implementation, and
 we want to be able to switch it in a future release if needed.</p>
 <div class="paragraph">
@@ -597,6 +598,28 @@ The performance target will be <code>absl::flat_node_map</code>.</p>
 </li>
 </ol>
 </div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+It&#8217;s possible that some of these containers may turn out to be of limited utility
+due to being dominated by another container that provides a superset of the API.
+This may happen, for instance, if <code>unordered_map</code> is as fast as <code>unordered_bucket_map</code>,
+or if <code>unordered_bucket_map</code> is as fast or faster than <code>unordered_node_map</code>. If this
+proves to be the case, we&#8217;ll need to decide whether to include the superseded
+container or not, taking differences in memory consumption into account.
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_implementation_notes">Implementation Notes</h2>
+<div class="sectionbody">
 <div class="paragraph">
 <p>There are several alternatives we can pursue when implementing <code>unordered_flat_map</code>:</p>
 </div>
@@ -611,31 +634,52 @@ The performance target will be <code>absl::flat_node_map</code>.</p>
 <li>
 <p><a href="https://probablydance.com/2018/05/28/a-new-fast-hash-table-in-response-to-googles-new-fast-hash-table/">Malte Skarupke&#8217;s "byte linked list"</a></p>
 </li>
+<li>
+<p><a href="https://abseil.io/about/design/swisstables">Abseil Swiss tables</a></p>
+</li>
 </ul>
 </div>
 <div class="paragraph">
 <p>Since at the moment there is no clear winner, we will probably need to implement
-all of these and compare their performance characteristics. I would start with
-Hopscotch hashing, because it&#8217;s very friendly to using SSE2 to test all 16
-candidate buckets at once for a match, if we use a similar trick as Abseil. (For
-instance, we can store <code>H % 251</code> in the metadata byte, with 255 reserved for "free",
-and then use packed comparison to quickly check if one of the 16 candidate buckets
-might contain our element.)</p>
+all of these and compare their performance characteristics. Most of the alternative
+implementations gravitate towards Robin Hood hashing, but there is a Hopscotch
+implementation (<a href="https://github.com/Tessil/hopscotch-map"><code>tsl::hopscotch</code></a>) that
+holds its own on <a href="https://tessil.github.io/2016/08/29/benchmark-hopscotch-map.html">benchmarks</a>.</p>
 </div>
 <div class="paragraph">
-<p>It&#8217;s possible that some of these containers may turn out to be of limited utility
-due to being dominated by another container that provides a superset of the API.
-This may happen, for instance, if <code>unordered_map</code> is as fast as <code>unordered_bucket_map</code>,
-or if <code>unordered_bucket_map</code> is as fast or faster than <code>unordered_node_map</code>. If this
-proves to be the case, we&#8217;ll need to decide whether to include the superseded
-container or not, taking differences in memory consumption into account.</p>
+<p>More references:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="https://martin.ankerl.com/2019/04/01/hashmap-benchmarks-01-overview/">Martin Ankerl&#8217;s benchmarks</a></p>
+</li>
+<li>
+<p><a href="https://martin.ankerl.com/2016/09/15/very-fast-hashmap-in-c-part-1/">Martin Ankerl&#8217;s thoughts on Hopscotch vs Robin Hood</a></p>
+</li>
+<li>
+<p><a href="https://probablydance.com/2017/02/26/i-wrote-the-fastest-hashtable/">Malte Skarupke&#8217;s Robin Hood table</a></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>There are also other, less sophisticated, alternatives we can pursue. We can explore
+linear probing with an upper limit on probes, and reallocate if that&#8217;s reached. If
+the limit is set to a multiple of 16, this can be accomplished by a SSE2 packed
+compare similar to Abseil&#8217;s technique, if we store e.g. <code>hash mod 251</code> in the byte
+metadata.</p>
+</div>
+<div class="paragraph">
+<p>We can also explore a hybrid option where the first element of the per-bucket linked
+list is stored directly in the bucket array (as in a flat map), but the rest are
+chained as in a closed addressing map.</p>
 </div>
 </div>
 </div>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-03-02 19:51:40 +0200
+Last updated 2022-03-02 20:10:32 +0200
 </div>
 </div>
 </body>
