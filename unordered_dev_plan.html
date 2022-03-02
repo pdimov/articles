@@ -527,6 +527,22 @@ an important benefit that we have over <code>std::unordered_*</code>.</p>
 <p>Provide more than one container per category. We will experiment will
 several possibilities, but at the end we must settle on one.</p>
 </li>
+<li>
+<p>Change the requirements placed on the provided hash function.
+In particular, we will not require uniform distribution over the entire
+range of <code>std::size_t</code>, or that all the bits of the hash function are
+dependent on the key or are of the same quality. As explained in the
+documentation of <code>boost::hash</code>, this is not a requirement the standard
+imposes on the Hash function object or on specializations of <code>std::hash</code>.</p>
+<div class="paragraph">
+<p>(This implies that we will not use hash to bucket policies that only take
+the low bits, such as <code>H mod 2^N</code>, or that ignore the low bits, such as
+Lemire&#8217;s <code>fastrange</code>. The <code>uint32.cpp</code> and <code>uint64.cpp</code> benchmarks
+deliberately include tests that have pathological behavior with such bucket
+distributions. Our hash to bucket mapping should be dependent on all the bits
+of the hash value.)</p>
+</div>
+</li>
 </ol>
 </div>
 </div>
@@ -619,7 +635,7 @@ container or not, taking differences in memory consumption into account.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-02-28 05:51:21 +0200
+Last updated 2022-03-02 19:51:40 +0200
 </div>
 </div>
 </body>

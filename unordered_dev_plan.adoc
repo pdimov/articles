@@ -54,6 +54,19 @@ We will not
    an important benefit that we have over `std::unordered_*`.
 4. Provide more than one container per category. We will experiment will
    several possibilities, but at the end we must settle on one.
+5. Change the requirements placed on the provided hash function.
+   In particular, we will not require uniform distribution over the entire
+   range of `std::size_t`, or that all the bits of the hash function are
+   dependent on the key or are of the same quality. As explained in the
+   documentation of `boost::hash`, this is not a requirement the standard
+   imposes on the Hash function object or on specializations of `std::hash`.
++
+(This implies that we will not use hash to bucket policies that only take
+the low bits, such as `H mod 2^N`, or that ignore the low bits, such as
+Lemire's `fastrange`. The `uint32.cpp` and `uint64.cpp` benchmarks
+deliberately include tests that have pathological behavior with such bucket
+distributions. Our hash to bucket mapping should be dependent on all the bits
+of the hash value.)
 
 ## Container Variations
 
