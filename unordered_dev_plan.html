@@ -664,10 +664,10 @@ holds its own on <a href="https://tessil.github.io/2016/08/29/benchmark-hopscotc
 </div>
 <div class="paragraph">
 <p>There are also other, less sophisticated, alternatives we can pursue. We can explore
-linear probing with an upper limit on probes, and reallocate if that&#8217;s reached. If
-the limit is set to a multiple of 16, this can be accomplished by a SSE2 packed
-compare similar to Abseil&#8217;s technique, if we store e.g. <code>hash mod 251</code> in the byte
-metadata.</p>
+simple linear probing with an upper limit on probes, and reallocate if that&#8217;s
+reached. If the limit is set to a multiple of 16, this can be accomplished by a SSE2
+packed compare similar to Abseil&#8217;s technique, if we store e.g. <code>hash mod 251</code> in the
+byte metadata.</p>
 </div>
 <div class="paragraph">
 <p>We can also explore a hybrid option where the first element of the per-bucket linked
@@ -679,7 +679,7 @@ chained as in a closed addressing map.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2022-03-02 20:10:32 +0200
+Last updated 2022-03-02 21:07:31 +0200
 </div>
 </div>
 </body>
