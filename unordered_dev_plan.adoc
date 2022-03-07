@@ -105,7 +105,7 @@ The performance target here will be `absl::flat_hash_map`.
 4. `unordered_node_map`. Same as `unordered_flat_map`, but holds pointers to
    the elements rather than the elements themselves in the bucket array. The
    difference with `unordered_flat_map` is pointer and reference stability.
-   The performance target will be `absl::flat_node_map`.
+   The performance target will be `absl::node_hash_map`.
 
 NOTE: It's possible that some of these containers may turn out to be of limited utility
 due to being dominated by another container that provides a superset of the API.
